@@ -36,6 +36,18 @@ After changing `db/schema.ts`, generate a descriptive migration:
 npm run db:generate -- --name add_descriptive_change
 ```
 
+## API workflow tests
+
+The API integration suite uses Node's built-in test runner without additional dependencies. It exercises the real Netlify Function and PostgreSQL transactions, not mocked persistence. Start the linked site's Netlify Dev server on port 8889 using the local workflow above, then run this command in a second terminal:
+
+```bash
+npm run test:api
+```
+
+The suite targets only `http://localhost:8889`, creates fresh HTTP-only-cookie workspaces, and keeps cookies and response bodies out of diagnostic output. It covers authoritative checkout prices, stock reservations, acceptance retries, concurrent checkout and refunds, sold-out protection, merchant availability, stale inventory, input validation, origin checks, and workspace isolation. Refunds remain explicitly simulated; the tests do not invoke AI or move money.
+
+Tests persist demo records in the linked site's Netlify Database. Use a dedicated development/preview site, not a production-linked site. Successful workflows cancel their test orders; isolated workspaces remain until the existing seven-day cleanup removes them. A running Netlify Dev server and reachable database are required; the suite fails rather than silently skipping when either is unavailable. Build, development-server, and test commands are not run during platform-managed editing sessions; automatic platform build validation does not execute this suite.
+
 ## API
 
 | Method | Path | Payload / query | Purpose |
