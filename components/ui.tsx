@@ -1,4 +1,8 @@
-import { ArrowUpRight, Check, Clock3, AlertTriangle } from "lucide-react";
+import { ArrowUpRight, Award, Check, Clock3, AlertTriangle } from "lucide-react";
+
+export function BestSellerBadge() {
+  return <span className="badge best-seller-badge" title="Manually awarded in the demo control room based on completed demo sales"><Award size={13} />Best Seller</span>;
+}
 
 export function ConfidenceBadge({ score, compact = false }: { score: number; compact?: boolean }) {
   return <span className={`badge ${score >= 85 ? "badge-green" : "badge-amber"}`}>

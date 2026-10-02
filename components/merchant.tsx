@@ -6,7 +6,7 @@ import type { Product, Order } from "@/lib/types";
 import { rupees } from "@/lib/types";
 import type { NovaEngine } from "./use-nova";
 import ProductArt from "./product-art";
-import { ConfidenceBadge, relativeTime } from "./ui";
+import { BestSellerBadge, ConfidenceBadge, relativeTime } from "./ui";
 
 export default function Merchant({ engine, storeId, setStoreId }: { engine: NovaEngine; storeId: string; setStoreId: (id: string) => void }) {
   const { snapshot, ready, busy, mutate, refresh } = engine;
@@ -19,6 +19,7 @@ export default function Merchant({ engine, storeId, setStoreId }: { engine: Nova
   const [replies, setReplies] = useState<{ text: string; confirmation: string }[]>([]);
   const [showOrder, setShowOrder] = useState(true);
   const pending = snapshot.orders.find(order => order.storeId === store.id && order.status === "pending");
+  const acceptedOrders = snapshot.orders.filter(order => order.storeId === store.id && order.status === "accepted");
   const latestOrder = snapshot.orders.find(order => order.storeId === store.id);
   const availableCount = catalog.filter(product => product.isAvailable && product.quantity > 0).length;
 
@@ -42,6 +43,7 @@ export default function Merchant({ engine, storeId, setStoreId }: { engine: Nova
   }
 
   return <div className="view-enter merchant-view">
+    {store.bestSeller && <div className="merchant-award-note"><BestSellerBadge /><span>Recognized by the demo control room for completed neighborhood sales.</span></div>}
     <div className="workspace-context"><div className="context-store"><span className="store-avatar"><StoreIcon size={20} /></span><div><label htmlFor="merchant-store">YOUR STOREFRONT</label><select id="merchant-store" value={store.id} onChange={event => { setStoreId(event.target.value); setReplies([]); setSelectedId(""); setShowOrder(true); }}>{snapshot.stores.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></div><ConfidenceBadge score={store.syncConfidenceScore} /></div><button className="button button-outline" onClick={incomingOrder} disabled={!ready || !!busy || (!store.isAcceptingOrders && !pending)}><ShoppingBag size={16} />{pending ? "Review incoming order" : "Simulate incoming order"}</button></div>
     <div className="merchant-grid">
       <section className="panel conversation-panel">
@@ -71,6 +73,7 @@ export default function Merchant({ engine, storeId, setStoreId }: { engine: Nova
     </div>
     <div className={`merchant-availability ${!store.isAcceptingOrders ? "store-paused" : ""}`}><span className="availability-icon">{store.isAcceptingOrders ? <CircleCheck size={22} /> : <PauseCircle size={22} />}</span><div><strong>{store.isAcceptingOrders ? "Walk-ins piling up? Your storefront can wait." : "Take a breath. Your storefront is paused."}</strong><p>{store.isAcceptingOrders ? "Pause new orders when the shop gets busy. We’ll guide shoppers to a nearby alternative." : "New checkout requests are blocked until you’re ready. Existing orders keep their audit trail."}</p></div><button className="button button-outline" disabled={!ready || !!busy} onClick={() => mutate("stores/status", { storeId: store.id, accepting: !store.isAcceptingOrders }, store.isAcceptingOrders ? "New orders paused. Take care of your walk-ins." : "You’re accepting neighborhood orders again.")}>{store.isAcceptingOrders ? "Pause new orders" : "Resume accepting orders"}</button></div>
     {pending && showOrder && <div className="order-popup" role="dialog" aria-labelledby="order-popup-title"><div className="order-popup-top"><span className="eyebrow"><span className="status-dot" />INCOMING ORDER REQUEST</span><button className="icon-button" aria-label="Minimize incoming order" onClick={() => setShowOrder(false)}><X size={17} /></button></div><div className="order-popup-title"><span><ShoppingBag size={24} /></span><div><h3 id="order-popup-title">A neighbor is waiting.</h3><p>{pending.id} · {pending.customer}</p></div><strong>{rupees(pending.amount)}</strong></div><div className="order-items">{pending.items.map(item => <span key={item.productId}>{item.quantity} × {item.name}</span>)}</div><div className="order-popup-note"><ShieldCheck size={13} />Rejecting safely triggers an automated simulated refund.</div><div className="order-popup-actions"><button className="button button-primary" disabled={!ready || !!busy} onClick={() => mutate("orders/accept", { orderId: pending.id }, "Order accepted. Your shopper has been notified.")}>{busy === "orders/accept" ? <LoaderCircle size={16} className="spin" /> : <CheckCheck size={16} />}Accept order</button><button className="button button-reject" disabled={!ready || !!busy} onClick={() => mutate("orders/cancel", { orderId: pending.id, reason: "merchant_busy" }, "Simulated refund dispatched. Support ticket resolved automatically.")}>{busy === "orders/cancel" ? <LoaderCircle size={16} className="spin" /> : <X size={16} />}Reject · too busy</button></div></div>}
+    {acceptedOrders.length > 0 && <section className="panel delivery-completions"><div className="section-heading"><div><h2>Ready for the final step.</h2><p>Simulate delivery completion to update your completed-sales ranking. No real delivery is booked.</p></div></div>{acceptedOrders.map(order => <div className="delivery-completion-row" key={order.id}><div><strong>{order.id} · {order.customer}</strong><span>{rupees(order.amount)} · accepted</span></div><button className="button button-primary" disabled={!ready || !!busy} onClick={() => mutate("orders/complete", { orderId: order.id }, "Demo delivery completed. Your sales ranking is updated.")}><CircleCheck size={15} />Mark demo delivered</button></div>)}</section>}
     {!pending && latestOrder && <div className="last-order-note"><CircleCheck size={15} />Latest request {latestOrder.id}: {latestOrder.status}.{latestOrder.refundStatus === "completed" ? " Simulated refund completed; support ticket automatically closed." : " Your customer sees the confirmation instantly."}</div>}
   </div>;
 }

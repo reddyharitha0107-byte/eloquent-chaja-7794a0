@@ -119,6 +119,22 @@ export function createApi(workspaceId: string) {
     response.json(result);
   });
 
+  router.post("/orders/complete", async (request, response) => {
+    const orderId = inputString(request.body?.orderId);
+    if (!orderId) { response.status(400).json({ error: "Provide an order ID." }); return; }
+    const result = await db.transaction(async transaction => {
+      const [order] = await transaction.select().from(orders).where(and(eq(orders.workspaceId, workspaceId), eq(orders.id, orderId))).for("update");
+      if (!order) return { status: 404, error: "Order not found." };
+      if (order.status === "delivered") return { status: 200 };
+      if (order.status !== "accepted" || order.refundStatus !== "none") return { status: 409, error: "Only accepted, non-refunded orders can be marked delivered." };
+      await transaction.update(orders).set({ status: "delivered" }).where(and(eq(orders.workspaceId, workspaceId), eq(orders.id, orderId)));
+      await transaction.insert(events).values({ workspaceId, storeId: order.storeId, orderId, trigger: "Demo delivery completed", action: "Order marked delivered · completed-sales ranking updated · no real delivery or payment", type: "order" });
+      return { status: 200 };
+    });
+    if (result.error) { response.status(result.status).json({ error: result.error }); return; }
+    response.json({ completed: true, simulated: true });
+  });
+
   // Order row locking prevents double payouts and duplicate support resolutions on retries.
   router.post("/orders/cancel", async (request, response) => {
     const orderId = inputString(request.body?.orderId);
@@ -146,6 +162,46 @@ export function createApi(workspaceId: string) {
     });
     if (typeof result.status === "number") { response.status(result.status).json({ error: result.error }); return; }
     response.json({ ...result, simulated: true, message: "Refund Dispatched Instantly via Nova Sync Engine" });
+  });
+
+  router.post("/stores/profile", async (request, response) => {
+    const storeId = inputString(request.body?.storeId);
+    const name = inputString(request.body?.name, 100);
+    const owner = inputString(request.body?.owner, 100);
+    const address = inputString(request.body?.address, 200);
+    const category = inputString(request.body?.category, 60);
+    const accepting = request.body?.accepting;
+    if (!storeId || !name || !owner || !address || !category || typeof accepting !== "boolean") {
+      response.status(400).json({ error: "Provide a retailer name, owner, address, category, and order availability." }); return;
+    }
+    const updated = await db.transaction(async transaction => {
+      const [store] = await transaction.update(stores).set({ name, owner, address, category, isAcceptingOrders: accepting }).where(and(eq(stores.workspaceId, workspaceId), eq(stores.id, storeId))).returning({ id: stores.id });
+      if (!store) return false;
+      await transaction.insert(events).values({ workspaceId, storeId, trigger: "Retailer updated in demo control room", action: "Store details saved · order availability updated across all perspectives", type: "retailer" });
+      return true;
+    });
+    if (!updated) { response.status(404).json({ error: "Retailer not found." }); return; }
+    response.json({ updated: true });
+  });
+
+  router.post("/stores/badge", async (request, response) => {
+    const storeId = inputString(request.body?.storeId);
+    const bestSeller = request.body?.bestSeller;
+    if (!storeId || typeof bestSeller !== "boolean") { response.status(400).json({ error: "Provide a retailer ID and badge choice." }); return; }
+    const result = await db.transaction(async transaction => {
+      const [store] = await transaction.select().from(stores).where(and(eq(stores.workspaceId, workspaceId), eq(stores.id, storeId))).for("update");
+      if (!store) return { status: 404, error: "Retailer not found." };
+      if (store.bestSeller === bestSeller) return { status: 200 };
+      if (bestSeller) {
+        const [sales] = await transaction.select({ count: sql<number>`COUNT(*)::int` }).from(orders).where(and(eq(orders.workspaceId, workspaceId), eq(orders.storeId, storeId), eq(orders.status, "delivered"), eq(orders.refundStatus, "none")));
+        if (!sales.count) return { status: 409, error: "Complete a demo delivery before awarding this retailer a Best Seller badge." };
+      }
+      await transaction.update(stores).set({ bestSeller }).where(and(eq(stores.workspaceId, workspaceId), eq(stores.id, storeId)));
+      await transaction.insert(events).values({ workspaceId, storeId, trigger: bestSeller ? "Best Seller badge awarded" : "Best Seller badge removed", action: bestSeller ? "Manual demo admin award · badge visible to merchants and customers" : "Retailer badge removed across all perspectives", type: "retailer" });
+      return { status: 200 };
+    });
+    if (result.error) { response.status(result.status).json({ error: result.error }); return; }
+    response.json({ bestSeller });
   });
 
   router.post("/stores/status", async (request, response) => {

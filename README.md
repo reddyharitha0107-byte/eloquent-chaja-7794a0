@@ -4,23 +4,26 @@ NOVA SYNC is an intelligent, digital-first orchestration prototype for Nova Cart
 
 ## The three perspectives
 
+Email login is required before entering the dashboard. Netlify Identity provides email/password sign-in, account registration with email confirmation, password recovery, and sign-out. After signing in, choose **Admin / Operations**, **Merchant**, or **Customer**; the dashboard toggle also lets you switch perspectives. This is intentionally **open demo role selection**: every authenticated account can use every role, including the admin controls. These role choices are not production authorization or proof of retailer ownership.
+
 - **Merchant:** A WhatsApp-style simulator asks for stock confirmation. Replies `1` and `2` update PostgreSQL inventory, change storefront visibility, and create an orchestration event. Merchants can accept or reject incoming orders and pause new orders during busy periods.
 - **Customer:** A neighborhood storefront shows stock-confidence badges, category and city filters, live availability, and preferences-based alternatives when a product is unavailable. Quick orders reserve stock atomically. Failed orders display a simulated instant refund and automatically resolved support ticket.
-- **Operations:** A live control room displays verified store coverage, prevented checkouts, resolved tickets, store health, and a persistent action trail. The 27% repeat purchase metric is a supplied baseline, not a claimed measured improvement. The activity chart is explicitly an illustrative trend. Live report export, order management, and operational AI analysis are included.
+- **Admin / Operations:** A live control room displays verified store coverage, prevented checkouts, resolved tickets, store health, and a persistent action trail. Retailer management ranks stores by completed demo sales, supports updates to retailer details and order availability, and allows manual Best Seller badge awards and removal. Badges appear in the merchant workspace, store network, and customer storefront. The 27% repeat purchase metric is a supplied baseline, not a claimed measured improvement. The activity chart is explicitly an illustrative trend. Live report export, order management, and operational AI analysis are included.
 
 ## Technology and deployment
 
 - Next.js App Router, React, TypeScript, Tailwind CSS, and Lucide React.
 - Express runs inside a modern Netlify Function using a small `serverless-http` request adapter.
 - Netlify Database provides managed PostgreSQL; Drizzle ORM defines schemas and transactions. Drizzle beta packages are deliberately used because they include the native Netlify adapter.
+- Netlify Identity (`@netlify/identity`) handles email authentication. API and SSE functions check the authenticated user before accessing data; workspace cookies are bound to the authenticated account, so changing accounts does not grant access to another account’s workspace.
 - Server-sent events publish complete state snapshots when the persisted event revision changes. Database-backed event detection runs every two seconds. Connections end after 22 seconds and reconnect automatically within the synchronous function execution budget; a 12-second recovery fetch handles interrupted streams.
 - Netlify AI Gateway provides optional GPT-4.1 mini operational analysis. The model is advisory only; deterministic, transactional code owns inventory and refunds.
 
-Netlify automatically detects Next.js, installs dependencies, builds the application, and applies migrations in `netlify/database/migrations`. The deployment needs the platform-provided database integration. AI analysis requires an AI-Gateway-enabled plan and at least one production deployment; failures produce an honest error rather than fabricated analysis.
+Netlify automatically detects Next.js, installs dependencies, builds the application, and applies migrations in `netlify/database/migrations`. The deployment needs the platform-provided database integration and Netlify Identity, which was enabled for this project. Configure registration and email confirmation in the site’s Identity settings; the interface shows account creation only when registration is open. AI analysis requires an AI-Gateway-enabled plan and at least one production deployment; failures produce an honest error rather than fabricated analysis.
 
 ## Run locally
 
-Prerequisites: Node.js 22 or later, the Netlify CLI, and access to a linked Netlify site with Netlify Database.
+Prerequisites: Node.js 22.12 or later, the Netlify CLI, and access to a linked Netlify site with Netlify Database and Netlify Identity.
 
 ```bash
 npm ci
@@ -85,19 +88,24 @@ Fresh inventory scores 98% for two hours, then decays; data older than 24 hours 
 
 ## Judge walkthrough
 
+First create an email account, follow the confirmation link, and sign in. Choose a role on the entry screen. Existing accounts can sign in directly; **Forgot password?** sends a recovery link. The following walkthrough uses the dashboard’s role switcher.
+
 1. Use **Run live demo** and open **Merchant**. Select Ramesh General Store and reply **2 · No, sold out** for Amul Butter. The card dims, its database availability and visibility become false, and the stream records the action.
 2. Open **Customer**, search **Amul Butter**, and observe local alternatives instead of a blank result. Search **coffee** to explore the neighborhood catalog. Use **Test checkout protection** on the Operations metric card to attempt checkout with unavailable stock; the API rejects it before any charge and increments the prevented-checkout count.
 3. Return to **Merchant**, review the initial pending order, and choose **Reject · too busy**. Open **Customer** to see the completed simulated refund. **Operations** records its remediation and increments resolved support tickets. Rejection also pauses the merchant’s new orders; use **Resume accepting orders** to reopen checkout.
-4. Reply **1** to confirm stock again. Place a **Quick order** in Customer, accept it in Merchant, and verify the live customer status. Alternatively, simulate a delivery issue and inspect the refund and support queue.
+4. Reply **1** to confirm stock again. Place a **Quick order** in Customer, accept it in Merchant, and verify the live customer status. Use **Mark demo delivered** in Merchant to complete the simulated delivery and update completed-sales rankings. Alternatively, simulate a delivery issue before completion and inspect the refund and support queue.
 5. Select **Pune** and inspect Corner Shop & Co.’s stale-stock warning. Confirm a specific product to see freshness recover for that product.
 6. Open **Nova intelligence** to review the ₹25 lakh plan and proposed four-week validation experiment, or generate an assessment from the current workspace.
 7. Open the application in a second tab in the same browser to observe changes across active interfaces without a manual refresh. A separate browser receives an isolated workspace.
+8. Open **Admin / Operations** and scroll to retailer management. Search or filter by city, review completed orders and INR sales, and use **Update** to edit a retailer’s name, owner, neighborhood address, category, or accepting-orders status. Award a **Best Seller** badge to Green Basket, which starts with one sample delivered order, or to a retailer whose demo delivery you completed. Switch to Merchant or Customer to see the badge; remove it in the control room to see it disappear everywhere.
+
+Sales rankings aggregate the entire workspace history, independently of the latest-100 order display. Only delivered orders without refunds count; pending, accepted, and cancelled orders do not. Rankings are ordered by revenue, then completed-order count, then retailer name. All figures represent demo activity and include initial samples, not real commercial results. Manual badge awards require at least one completed demo sale and are not independent certifications. Retailer updates, badge changes, and delivery completions record events in the same database transaction so all views refresh together.
 
 ## Prototype boundaries
 
 WhatsApp delivery and payment payouts are simulations, prominently labeled throughout the application. The mock gateway waits approximately 400 ms and returns a deterministic `SIM-` reference; it moves no money. The displayed refund duration measures the simulated gateway step, not all database/network latency. Refund retries are serialized by a row lock and do not issue another refund. Stock reservations are released on cancellation without silently reversing a merchant’s explicit out-of-stock decision.
 
-Private demo data is scoped by a random, HTTP-only cookie and expires after seven days; a scheduled function deletes expired workspaces. HTTPS uses a secure, partitioned `SameSite=None` cookie so embedded previews can keep an isolated workspace; local HTTP uses `SameSite=Strict`. Browser mutations also enforce the request origin. This is a public demonstration, not authenticated retailer access. Commercial deployment requires merchant/customer authentication, signed provider webhooks, a real payment provider with its own idempotency and payout reconciliation, delivery-provider integration, and scale/load verification. A production event transport should replace database polling at high concurrency. The sample customer names are fictional. No real retention improvement is claimed.
+Private demo data is scoped by a random, HTTP-only cookie bound to the signed-in Identity account and expires after seven days; a scheduled function deletes expired workspaces. HTTPS uses a secure, partitioned `SameSite=None` workspace cookie so embedded previews can keep an isolated workspace; local HTTP uses `SameSite=Strict`. Identity manages its own authentication cookies; browser policies may require opening the site directly rather than inside a third-party embedded preview. Browser mutations also enforce the request origin. Previously anonymous workspaces are replaced with a fresh authenticated workspace at first sign-in. All authenticated users can freely select admin, merchant, or customer in this demonstration. Commercial deployment requires server-enforced role permissions and retailer/customer ownership, signed provider webhooks, a real payment provider with its own idempotency and payout reconciliation, delivery-provider integration, and scale/load verification. A production event transport should replace database polling at high concurrency. The sample customer names are fictional. No real retention improvement is claimed.
 
 The financial allocation and baseline metrics are scenario assumptions. The proposed experiment compares 50 pilot stores with a control group for four weeks, measuring ghost-stock cancellation reduction, refund time, and repeat-purchase cohorts independently. No warehouses, dark stores, or new large teams are part of the proposal.
 

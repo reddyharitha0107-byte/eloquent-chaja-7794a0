@@ -1,4 +1,5 @@
 import type { Config } from "@netlify/functions";
+import { getUser } from "@netlify/identity";
 import { and, eq, desc } from "drizzle-orm";
 import { database } from "../../db";
 import { events, workspaces } from "../../db/schema";
@@ -7,10 +8,12 @@ import { readSnapshot } from "../../server/snapshot";
 
 // Short-lived SSE connections reconnect automatically; PostgreSQL is the shared event bus.
 export default async function handler(request: Request) {
+  const user = await getUser();
+  if (!user) return Response.json({ error: "Sign in to access live updates." }, { status: 401, headers: { "Cache-Control": "no-store" } });
   const id = workspaceCookie(request.headers.get("cookie"));
   if (!id) return Response.json({ error: "Initialize your workspace first." }, { status: 401 });
   const db = database();
-  const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, id));
+  const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).where(and(eq(workspaces.id, id), eq(workspaces.identityUserId, user.id)));
   if (!workspace) return Response.json({ error: "Workspace expired. Reload to start a new demo." }, { status: 401 });
   let cancelled = false;
   const encoder = new TextEncoder();

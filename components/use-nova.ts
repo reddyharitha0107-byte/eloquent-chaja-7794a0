@@ -27,6 +27,7 @@ export function useNova() {
   const refresh = useCallback(async () => {
     try {
       const response = await fetch("/api/v1/state", { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+      if (response.status === 401) { window.dispatchEvent(new Event("nova-session-expired")); return; }
       if (!response.ok) throw new Error("Connection unavailable");
       const state = await response.json() as Snapshot;
       if (!mounted.current) return;
@@ -65,6 +66,7 @@ export function useNova() {
     setBusy(path);
     try {
       const response = await fetch(`/api/v1/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(28_000) });
+      if (response.status === 401) { window.dispatchEvent(new Event("nova-session-expired")); return null; }
       const result = await response.json().catch(() => ({ error: "The sync service is temporarily unavailable. Please try again." }));
       if (!response.ok) {
         if (response.status === 409) await refresh();
