@@ -12,6 +12,7 @@ export interface Store {
   lastInventorySync: string;
   syncConfidenceScore: number;
   isAcceptingOrders: boolean;
+  bestSeller?: boolean;
 }
 
 export interface Product {
@@ -68,6 +69,7 @@ export interface Snapshot {
   tickets: Ticket[];
   events: SystemEvent[];
   totals?: { city: string; deflected: number; autoResolved: number }[];
+  retailerSales?: { storeId: string; completedOrders: number; revenue: number }[];
 }
 
 export interface SearchResult {

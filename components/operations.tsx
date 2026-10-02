@@ -10,7 +10,7 @@ import { ConfidenceBadge, relativeTime, SectionHeading } from "./ui";
 export function EventTable({ events, compact = true }: { events: SystemEvent[]; compact?: boolean }) {
   const icons = { inventory: RefreshCw, refund: Wallet, deflection: ShieldCheck, order: CheckCheck, insight: Sparkles };
   return <div className="table-scroll"><table className={`event-table ${compact ? "compact-table" : ""}`}>
-    <thead><tr><th>TIME</th><th>EVENT TRIGGER</th><th>ORDER ID</th><th>AUTOMATED ACTION</th></tr></thead>
+    <thead><tr><th>TIME</th><th>EVENT TRIGGER</th><th>ORDER ID</th><th>ACTION / OUTCOME</th></tr></thead>
     <tbody>{events.length ? events.map(event => {
       const Icon = icons[event.type as keyof typeof icons] ?? Activity;
       return <tr className="event-row" key={event.id}><td><span suppressHydrationWarning>{new Date(event.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })}</span><small>IST · {relativeTime(event.createdAt)}</small></td><td><div className="event-trigger"><span className={`event-icon event-${event.type}`}><Icon size={14} /></span><span>{event.trigger}</span></div></td><td><span className="order-code">{event.orderId ?? "—"}</span></td><td><span className="action-check"><CircleCheck size={13} />{event.action}</span></td></tr>;

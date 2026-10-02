@@ -9,14 +9,14 @@ export function workspaceCookie(cookie: string | null): string | null {
 }
 
 // A database lock makes first-request seeding safe across concurrent serverless instances.
-export async function ensureWorkspace(id: string) {
+export async function ensureWorkspace(id: string, identityUserId: string) {
   const db = database();
-  await db.transaction(async transaction => {
+  return db.transaction(async transaction => {
     await transaction.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${id}))`);
     const [existing] = await transaction.select().from(workspaces).where(eq(workspaces.id, id));
-    if (existing) return;
+    if (existing) return existing.identityUserId === identityUserId;
     const fixtures = createFixtures();
-    await transaction.insert(workspaces).values({ id });
+    await transaction.insert(workspaces).values({ id, identityUserId });
     await transaction.insert(stores).values(fixtures.stores.map(store => ({ ...store, workspaceId: id, lastInventorySync: new Date(store.lastInventorySync) })));
     await transaction.insert(products).values(fixtures.products.map(product => ({ ...product, workspaceId: id, lastInventorySync: new Date(product.lastInventorySync) })));
     await transaction.insert(orders).values(fixtures.orders.map(order => ({ ...order, workspaceId: id, createdAt: new Date(order.createdAt) })));
@@ -27,5 +27,6 @@ export async function ensureWorkspace(id: string) {
       { workspaceId: id, query: "organic honey", category: "Local finds", city: "Bengaluru", matchedCount: 2 },
       { workspaceId: id, query: "fresh bread", category: "Bakery", city: "Bengaluru", matchedCount: 2 },
     ]);
+    return true;
   });
 }

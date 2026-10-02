@@ -3,6 +3,7 @@ import type { OrderItem } from "../lib/types";
 
 export const workspaces = pgTable("workspaces", {
   id: uuid("id").primaryKey(),
+  identityUserId: text("identity_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   requestWindow: timestamp("request_window", { withTimezone: true }).defaultNow().notNull(),
   requestCount: integer("request_count").default(0).notNull(),
@@ -16,6 +17,7 @@ export const stores = pgTable("stores", {
   lastInventorySync: timestamp("last_inventory_sync", { withTimezone: true }).notNull(),
   syncConfidenceScore: integer("sync_confidence_score").default(98).notNull(),
   isAcceptingOrders: boolean("is_accepting_orders").default(true).notNull(),
+  bestSeller: boolean("best_seller").default(false).notNull(),
 }, table => [primaryKey({ columns: [table.workspaceId, table.id] })]);
 
 export const products = pgTable("products", {
